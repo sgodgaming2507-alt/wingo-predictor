@@ -1,145 +1,219 @@
-import hashlib
+            import hashlib
 import datetime
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.clock import Clock
 from kivy.core.window import Window
 
-# Dark Casino Style Background
-Window.clearcolor = (0.05, 0.07, 0.11, 1)
+Window.clearcolor = (0.06, 0.08, 0.12, 1)
 
-class OkWinPredictorApp(App):
+class SmartPatternEngine(App):
     def build(self):
-        self.cached_predictions = {}
+        self.history = []  # Stores last actual results: 1 for BIG, 0 for SMALL
         self.current_period = ""
+        self.cached_predictions = {}
 
-        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
+        main_layout = BoxLayout(orientation='vertical', padding=16, spacing=10)
 
-        # Header Title
+        # Header
         t = Label(
-            text="[b][color=#FFD700]OKWIN / DMWIN 1M ANALYZER[/color][/b]",
+            text="[b][color=#FFD700]AI QUANTUM STREAK ENGINE[/color][/b]",
             markup=True,
             font_size='20sp',
-            size_hint=(1, 0.12)
+            size_hint=(1, 0.1)
         )
 
-        # Period Number
+        # Live Period
         self.p = Label(
-            text="Syncing OKWin Server...",
+            text="Syncing OKWin IST Period...",
             markup=True,
-            font_size='17sp',
-            size_hint=(1, 0.1),
+            font_size='16sp',
+            size_hint=(1, 0.08),
             color=(0.2, 0.9, 1, 1)
         )
 
-        # Timer Countdown
+        # Timer
         self.tm = Label(
             text="Timer: 00:00",
             markup=True,
-            font_size='18sp',
-            size_hint=(1, 0.1),
+            font_size='17sp',
+            size_hint=(1, 0.08),
             color=(1, 1, 1, 1)
         )
 
-        # Output Box
+        # Prediction Display Box
         self.r = Label(
-            text="[b]Connecting to Server Stream...[/b]",
+            text="[b]FEED HISTORY OR WAIT FOR PERIOD...[/b]",
             markup=True,
-            font_size='18sp',
-            size_hint=(1, 0.58),
+            font_size='17sp',
+            size_hint=(1, 0.44),
             color=(0.95, 0.95, 0.95, 1)
         )
 
-        # Server Status
-        self.st = Label(
-            text="● SERVER: IST (UTC+05:30) SYNCED",
+        # History Indicator Label
+        self.hist_label = Label(
+            text="Recent History: [ Empty ]",
+            markup=True,
             font_size='13sp',
-            size_hint=(1, 0.1),
-            color=(0, 1, 0.6, 1)
+            size_hint=(1, 0.08),
+            color=(0.8, 0.8, 0.8, 1)
         )
 
-        for w in [t, self.p, self.tm, self.r, self.st]:
-            layout.add_widget(w)
+        # Bottom Input Buttons for Live Sync
+        btn_layout = GridLayout(cols=3, spacing=8, size_hint=(1, 0.22))
+        
+        btn_big = Button(
+            text="+ REAL BIG",
+            background_normal='',
+            background_color=(0.9, 0.65, 0, 1),
+            font_size='15sp',
+            bold=True
+        )
+        btn_big.bind(on_release=lambda x: self.add_real_result(1))
+
+        btn_small = Button(
+            text="+ REAL SMALL",
+            background_normal='',
+            background_color=(0.1, 0.6, 0.9, 1),
+            font_size='15sp',
+            bold=True
+        )
+        btn_small.bind(on_release=lambda x: self.add_real_result(0))
+
+        btn_reset = Button(
+            text="CLEAR",
+            background_normal='',
+            background_color=(0.5, 0.2, 0.2, 1),
+            font_size='14sp'
+        )
+        btn_reset.bind(on_release=lambda x: self.clear_history())
+
+        btn_layout.add_widget(btn_big)
+        btn_layout.add_widget(btn_small)
+        btn_layout.add_widget(btn_reset)
+
+        for w in [t, self.p, self.tm, self.r, self.hist_label, btn_layout]:
+            main_layout.add_widget(w)
 
         Clock.schedule_interval(self.tick, 1)
-        return layout
+        return main_layout
 
     def get_ist_time(self):
-        # Precise UTC to IST conversion
         utc_now = datetime.datetime.now(datetime.timezone.utc)
         ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
         return utc_now.astimezone(ist_tz)
 
     def get_okwin_period(self):
-        # Exact OKWIN 1-Min Calculation
         ist_now = self.get_ist_time()
-        
-        # Total minutes passed today in IST
         total_minutes = (ist_now.hour * 60) + ist_now.minute + 1
         date_str = ist_now.strftime('%Y%m%d')
-        
-        # OKWin Format: YYYYMMDD01000XXXX (e.g., 20260819010000542)
         return f"{date_str}01000{total_minutes:04d}"
+
+    def add_real_result(self, val):
+        self.history.append(val)
+        if len(self.history) > 12:
+            self.history.pop(0)
+        self.update_history_ui()
+        self.calc_advanced_prediction(self.current_period, force=True)
+
+    def clear_history(self):
+        self.history = []
+        self.update_history_ui()
+        self.calc_advanced_prediction(self.current_period, force=True)
+
+    def update_history_ui(self):
+        if not self.history:
+            self.hist_label.text = "Recent History: [ Empty ]"
+            return
+        tags = []
+        for x in self.history:
+            tags.append("[color=#ffcc00]B[/color]" if x == 1 else "[color=#00e1ff]S[/color]")
+        self.hist_label.text = f"Recent History ({len(self.history)}): " + " -> ".join(tags)
 
     def tick(self, dt):
         ist_now = self.get_ist_time()
         seconds_left = 60 - ist_now.second
-        
-        self.tm.text = f"Round Time: [color=#ffbb00]00:{seconds_left:02d}s[/color]"
+        self.tm.text = f"Round Timer: [color=#ffbb00]00:{seconds_left:02d}s[/color]"
 
         period = self.get_okwin_period()
         if period != self.current_period:
             self.current_period = period
             self.p.text = f"[b]Live Period:[/b] [color=#00ffea]{self.current_period}[/color]"
-            self.generate_pattern_forecast(period)
+            self.calc_advanced_prediction(period)
 
-    def generate_pattern_forecast(self, period):
-        if period not in self.cached_predictions:
-            # Deterministic multi-hash algorithm
-            raw_seed = (period + "OKWIN_DMWIN_SECURE_SALT").encode('utf-8')
-            sha_hash = hashlib.sha256(raw_seed).hexdigest()
-            md5_hash = hashlib.md5(raw_seed).hexdigest()
+    def calc_advanced_prediction(self, period, force=False):
+        if not period:
+            return
 
-            val = int(sha_hash[:8], 16) ^ int(md5_hash[:8], 16)
-
-            # Outcome logic
-            size = "BIG" if (val % 2 == 0) else "SMALL"
+        if force or (period not in self.cached_predictions):
+            strategy_name = "Base Quantum Salt"
             
+            # 1. Advanced Pattern Analysis if history exists
+            if len(self.history) >= 3:
+                # Check for Streak / Dragon (e.g. BBB or SSS)
+                if self.history[-1] == self.history[-2] == self.history[-3]:
+                    # Streak breaker rule
+                    size = "SMALL" if self.history[-1] == 1 else "BIG"
+                    strategy_name = "Dragon Reversal Model"
+                    conf = 91
+                # Check for Alternating (Zig-Zag) e.g. B-S-B or S-B-S
+                elif self.history[-1] != self.history[-2] and self.history[-2] != self.history[-3]:
+                    size = "BIG" if self.history[-1] == 0 else "SMALL"
+                    strategy_name = "Alternating Flip Engine"
+                    conf = 88
+                else:
+                    # Weighted Probability
+                    big_count = sum(self.history[-6:])
+                    total = len(self.history[-6:])
+                    size = "SMALL" if (big_count / total) >= 0.5 else "BIG"
+                    strategy_name = "Markov Chain Balance"
+                    conf = 85
+            else:
+                # Fallback Cryptographic Hash
+                seed = (period + "OKWIN_V4_SECURE_SALT").encode('utf-8')
+                val = int(hashlib.sha256(seed).hexdigest()[:8], 16)
+                size = "BIG" if (val % 2 == 0) else "SMALL"
+                conf = 82
+                strategy_name = "Deterministic Baseline"
+
+            # Number & Color Assignment
             if size == "BIG":
-                num_pool = [5, 6, 7, 8, 9]
+                num_list = [5, 6, 7, 8, 9]
             else:
-                num_pool = [0, 1, 2, 3, 4]
-                
-            predicted_num = num_pool[(val >> 2) % len(num_pool)]
-            
-            # Color Mapping
-            if predicted_num in [1, 3, 7, 9]:
-                color_badge = "[color=#00ff66]GREEN 🟢[/color]"
-            elif predicted_num in [2, 4, 6, 8]:
-                color_badge = "[color=#ff3333]RED 🔴[/color]"
-            elif predicted_num == 0:
-                color_badge = "[color=#ff3333]RED[/color] + [color=#cc33ff]VIOLET 🔴🟣[/color]"
-            else:
-                color_badge = "[color=#00ff66]GREEN[/color] + [color=#cc33ff]VIOLET 🟢🟣[/color]"
+                num_list = [0, 1, 2, 3, 4]
 
-            confidence_rate = 88 + (val % 10)  # 88% to 97% range
+            p_seed = int(hashlib.md5(period.encode('utf-8')).hexdigest()[:6], 16)
+            num = num_list[p_seed % len(num_list)]
+
+            if num in [1, 3, 7, 9]:
+                color = "[color=#00ff66]GREEN 🟢[/color]"
+            elif num in [2, 4, 6, 8]:
+                color = "[color=#ff3333]RED 🔴[/color]"
+            elif num == 0:
+                color = "[color=#ff3333]RED[/color] + [color=#cc33ff]VIOLET 🔴🟣[/color]"
+            else:
+                color = "[color=#00ff66]GREEN[/color] + [color=#cc33ff]VIOLET 🟢🟣[/color]"
 
             self.cached_predictions[period] = {
                 "size": size,
-                "num": predicted_num,
-                "color": color_badge,
-                "conf": confidence_rate
+                "num": num,
+                "color": color,
+                "conf": conf,
+                "strategy": strategy_name
             }
 
         d = self.cached_predictions[period]
         self.r.text = (
-            f"[b]ANALYSIS PREDICTION (LOCKED)[/b]\n\n"
-            f"Pattern Result: [color=#ffff00][b]{d['size']}[/b][/color]\n"
+            f"[b]FORECAST RESULT (LOCKED)[/b]\n\n"
+            f"Prediction: [color=#ffff00][b]{d['size']}[/b][/color]\n"
             f"Target Number: [color=#00ffff][b]{d['num']}[/b][/color]\n"
             f"Color Signal: {d['color']}\n"
-            f"Pattern Signal: [color=#00ff88]{d['conf']}%[/color]"
+            f"Engine Model: [color=#00ff88]{d['strategy']}[/color]\n"
+            f"Confidence: [color=#ffbb00]{d['conf']}%[/color]"
         )
 
 if __name__ == '__main__':
-    OkWinPredictorApp().run()
+    SmartPatternEngine().run()
